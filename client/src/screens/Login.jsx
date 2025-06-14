@@ -5,127 +5,124 @@ import { useNavigate } from "react-router-dom";
 
 export default function Login() {
   const navigate = useNavigate();
-  console.log("hello from start front end");
+
   const [formData, setFormData] = useState({
     username: "",
     password: "",
   });
-  console.log("✅ Initial formData:", formData);
 
   const [errors, setErrors] = useState({});
-
-    console.log("✅ Initial errors:", errors);
-
   const [showPassword, setShowPassword] = useState(false);
-    console.log("✅ Initial showPassword:", showPassword);
-
   const [focusedFields, setFocusedFields] = useState({
     username: false,
     password: false,
   });
-console.log("✅ Initial focusedFields:", focusedFields);
-  
   const [loading, setLoading] = useState(false);
-
-    console.log("✅ Initial loading:", loading);
-
   const [serverError, setServerError] = useState(null);
-  console.log("✅ Initial serverError:", serverError);
 
-
-const handleChange = (e) => {
-  const { name, value } = e.target;
-  console.log(`✏️ Field changed: ${name} = ${value}`); // 🔍 تتبع القيمة التي أدخلها المستخدم
-
-  setFormData((prevData) => {
-    const updatedData = { ...prevData, [name]: value };
-    console.log("📦 Updated formData:", updatedData); // 🔍 تتبع بيانات formData بعد التحديث
-    return updatedData;
-  });
-};
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prevData) => ({ ...prevData, [name]: value }));
+  };
 
   const handleFocus = (field) => {
-    setFocusedFields((prev) => {
-      const updatedFocus = { ...prev, [field]: true };
-      console.log("🟡 Focused Field:", updatedFocus);
-      return updatedFocus;
-    });
+    setFocusedFields((prev) => ({ ...prev, [field]: true }));
   };
 
-    const handleBlur = (field) => {
-    setFocusedFields((prev) => {
-      const updatedFocus = { ...prev, [field]: formData[field] !== "" };
-      console.log("🔵 Blurred Field:", updatedFocus);
-      return updatedFocus;
-    });
+  const handleBlur = (field) => {
+    setFocusedFields((prev) => ({
+      ...prev,
+      [field]: formData[field] !== "",
+    }));
   };
 
-const validate = () => {
-  const newErrors = {};
-  console.log("🔍 Validating formData:", formData);
+  const validate = () => {
+    const newErrors = {};
+    if (!formData.username.trim()) {
+      newErrors.username = "يرجى إدخال اسم المستخدم";
+    }
+    if (!formData.password) {
+      newErrors.password = "يرجى إدخال كلمة المرور";
+    }
+    return newErrors;
+  };
 
-  if (!formData.username.trim()) {
-    newErrors.username = "يرجى إدخال اسم المستخدم";
-    console.log("❌ username is empty");
-  }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
-  if (!formData.password) {
-    newErrors.password = "يرجى إدخال كلمة المرور";
-    console.log("❌ password is empty");
-  }
+    const newErrors = validate();
+    setErrors(newErrors);
+    setServerError(null);
 
-  console.log("✅ Validation result:", newErrors);
-  return newErrors;
-};
+    if (Object.keys(newErrors).length === 0) {
+      try {
+        setLoading(true);
+        const res = await fetch("http://localhost:5000/api/auth/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(formData),
+        });
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  console.log("🚀 Form submitted");
+        const data = await res.json();
 
-  const newErrors = validate(); // تم استبدال التحقق اليدوي بهذه الدالة الموحدة
+        if (!res.ok) throw new Error(data.error || "فشل تسجيل الدخول");
 
-  setErrors(newErrors);
-  setServerError(null);
-
-  if (Object.keys(newErrors).length === 0) {
-    try {
-      setLoading(true);
-      console.log("📤 Sending formData to server:", formData);
-
-      const res = await fetch("http://localhost:5000/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      });
-
-      console.log("📨 Server responded:", res);
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        console.log("❌ Server error:", errorData);
-        throw new Error(errorData.error || "فشل تسجيل الدخول");
+        if (data.success) {
+          alert("تم تسجيل الدخول بنجاح!");
+          // navigate("/dashboard");
+          // localStorage.setItem("user", JSON.stringify(data.user));
+        } else {
+          setServerError(data.error || "بيانات الدخول غير صحيحة");
+        }
+      } catch (error) {
+        console.error("❌ Network/server error:", error);
+        setServerError(error.message || "حدث خطأ في الاتصال بالسيرفر");
+      } finally {
+        setLoading(false);
       }
+    }
+  };
 
-      const data = await res.json();
-      console.log("✅ Login success response:", data);
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
 
-      if (data.success) {
-        alert("تم تسجيل الدخول بنجاح!");
-        // navigate("/dashboard");
-        // localStorage.setItem("user", JSON.stringify(data.user));
-      } else {
-        setServerError(data.error || "بيانات الدخول غير صحيحة");
+    if (!formData.username) {
+      console.log("⚠️ لم تدخل اسم مستخدم!");
+      return;
+    }
+
+    try {
+      console.log("جارٍ التحقق...");
+
+      const response = await fetch(
+        "http://localhost:5000/api/auth/quick-check",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: formData.username }),
+        }
+      );
+
+      const result = await response.json();
+      console.log("📦 رد السيرفر:", result);
+     if (result.exists && result.email) {
+  console.log("✅ اسم المستخدم موجود. سيتم الانتقال الآن...");
+  navigate("/verify-code", {
+    state: {
+      username: formData.username,
+      maskedEmail: result.maskedEmail,
+    },
+  });
+}
+else {
+        console.log("❌ اسم المستخدم غير موجود.");
       }
     } catch (error) {
-      console.error("❌ Network/server error:", error);
-      setServerError(error.message || "حدث خطأ في الاتصال بالسيرفر");
-    } finally {
-      setLoading(false);
+      console.error("❌ فشل الاتصال:", error);
     }
-  }
-};
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white">
@@ -155,9 +152,7 @@ const handleSubmit = async (e) => {
               onFocus={() => handleFocus("username")}
               onBlur={() => handleBlur("username")}
               className={`border ${
-                focusedFields.username
-                  ? "border-blue-500"
-                  : "border-gray-300"
+                focusedFields.username ? "border-blue-500" : "border-gray-300"
               } rounded-lg px-4 py-3 w-full text-md focus:outline-none text-right`}
             />
             {errors.username && (
@@ -184,9 +179,7 @@ const handleSubmit = async (e) => {
               onFocus={() => handleFocus("password")}
               onBlur={() => handleBlur("password")}
               className={`border ${
-                focusedFields.password
-                  ? "border-blue-500"
-                  : "border-gray-300"
+                focusedFields.password ? "border-blue-500" : "border-gray-300"
               } rounded-lg px-4 py-3 w-full text-md focus:outline-none text-right pr-10`}
             />
             <div
@@ -209,7 +202,11 @@ const handleSubmit = async (e) => {
 
           {/* رابط نسيت كلمة المرور */}
           <div className="text-center">
-            <a href="#" className="text-blue-600 text-sm hover:underline">
+            <a
+              href="#"
+              className="text-blue-600 text-sm hover:underline"
+              onClick={handleForgotPassword}
+            >
               <strong>نسيت كلمة المرور؟</strong>
             </a>
           </div>
