@@ -1,16 +1,13 @@
+// controllers/authController.js
+
 const bcrypt = require("bcrypt");
 const pool = require("../config/db");
-const crypto = require("crypto");
 const nodemailer = require("nodemailer");
-const pool = require("../db");
 
+// تسجيل الدخول
 const loginUser = async (req, res) => {
-  const bcrypt = require("bcrypt");
-  console.log("hello from start of back end");
-
   const { username, password } = req.body;
 
-  // تحقق من الإدخال
   if (!username || !password) {
     return res.status(400).json({
       success: false,
@@ -26,14 +23,12 @@ const loginUser = async (req, res) => {
   }
 
   try {
-    // 1. البحث عن المستخدم حسب الاسم أو البريد
     const result = await pool.query(
       `SELECT user_id, user_name, password FROM users 
        WHERE user_name = $1 OR user_email = $1`,
       [username.trim()]
     );
 
-    // 2. التحقق من وجود المستخدم
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
@@ -42,13 +37,12 @@ const loginUser = async (req, res) => {
     }
 
     const user = result.rows[0];
-
     const isMatch = await bcrypt.compare(password, user.password);
+
     if (!isMatch) {
       return res.status(401).json({ error: "كلمة المرور غير صحيحة" });
     }
 
-    // 4. تسجيل الدخول ناجح - حذف كلمة المرور من البيانات الراجعة
     const { password: _, ...userData } = user;
 
     return res.status(200).json({
@@ -65,9 +59,8 @@ const loginUser = async (req, res) => {
   }
 };
 
+// إنشاء حساب جديد
 const signupUser = async (req, res) => {
-  console.log("hello from back end");
-
   const {
     username,
     password,
@@ -78,16 +71,11 @@ const signupUser = async (req, res) => {
   } = req.body;
 
   const hashedPassword = await bcrypt.hash(password, 10);
-  console.log("🔐 كلمة المرور المشفرة:", hashedPassword);
-
-  [username, hashedPassword, phone, city, email, region_id];
-
-  const client = await pool.connect(); // استخدام اتصال منفصل
+  const client = await pool.connect();
 
   try {
-    await client.query("BEGIN"); // بدء المعاملة
+    await client.query("BEGIN");
 
-    // 1. التحقق من المستخدم الموجود
     const userCheck = await client.query(
       `SELECT 1 FROM users 
        WHERE user_name = $1 OR user_email = $2 LIMIT 1`,
@@ -101,7 +89,6 @@ const signupUser = async (req, res) => {
       });
     }
 
-    // 2. إدراج المستخدم الجديد
     const result = await client.query(
       `INSERT INTO users 
        (user_name, password, user_phone, user_address, user_email, region_id) 
@@ -110,17 +97,80 @@ const signupUser = async (req, res) => {
       [username, hashedPassword, phone, city, email, region_id]
     );
 
-    await client.query("COMMIT"); // تأكيد الحفظ
+    await client.query("COMMIT");
 
-    // 3. التحقق من الإدراج فعلياً
-    const verify = await client.query(
-      "SELECT * FROM users WHERE user_id = $1",
-      [result.rows[0].user_id]
-    );
+// ✅  إرسال رسالة ترحيب على البريد
+    const transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: process.env.EMAIL_PORT,
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
 
-    if (verify.rows.length === 0) {
-      throw new Error("فشل التحقق من الإدراج");
-    }
+    await transporter.sendMail({
+  from: `"كناري لطيور الزينة" <${process.env.EMAIL_USER}>`,
+  to: email,
+  subject: "🎉 أهلاً بك في  كناري للطيور و مرّبين الحيوانات الأليفة",
+  html: `
+    <div style="
+      direction: rtl;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f9fafb;
+      padding: 30px;
+      color: #1e293b;
+      border-radius: 10px;
+      max-width: 600px;
+      margin: auto;
+      border: 1px solid #cbd5e1;
+    ">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h2 style="color: #0284c7; margin-top: 10px;">مرحباً بك في كناري 🐾</h2>
+      </div>
+
+      <p style="font-size: 16px;">أهلاً ${username}،</p>
+
+      <p style="font-size: 16px;">
+        يسعدنا انضمامك إلى عائلة <strong>كناري</strong>، المتجر الإلكتروني المفضل لمحبي <strong>الطيور والحيوانات الأليفة</strong>.
+        نحن هنا لنقدم لك كل ما تحتاجه من طعام، مستلزمات، أعشاب، أقفاص، وإكسسوارات – وكل ذلك بجودة عالية وخدمة موثوقة.
+      </p>
+
+      <p style="font-size: 16px; margin-top: 15px;">
+        نعمل دائماً على توفير أحدث المنتجات والعروض التي تلبي احتياجات حيواناتك الأليفة وتُسهل عليك العناية بها.
+        اكتشف معنا تجربة تسوق مميزة وراحة بال كاملة.
+      </p>
+
+      <div style="
+        font-size: 20px;
+        font-weight: bold;
+        color: #0f172a;
+        background-color: #e0f2fe;
+        padding: 15px 30px;
+        border-radius: 10px;
+        width: fit-content;
+        margin: 25px auto;
+        letter-spacing: 1px;
+        text-align: center;
+        border: 1px dashed #0284c7;
+      ">
+        زور موقعنا الآن وابدأ رحلتك مع كناري 🛒
+      </div>
+
+      <hr style="margin: 30px 0; border: none; border-top: 1px solid #e2e8f0;" />
+
+      <p style="font-size: 14px; color: #64748b;">
+        نعتز بثقتك ونعدك بتجربة فريدة تهتم براحتك وراحة أليفك.
+      </p>
+
+      <p style="font-size: 14px; color: #64748b; margin-top: 5px;">
+        مع تحيات فريق <strong>كناري</strong>
+      </p>
+    </div>
+  `
+});
+
 
     return res.status(201).json({
       success: true,
@@ -140,10 +190,11 @@ const signupUser = async (req, res) => {
       technical: err.message,
     });
   } finally {
-    client.release(); // تحرير الاتصال
+    client.release();
   }
 };
 
+// التحقق من اسم المستخدم وعرض البريد المخفي
 const checkUsername = async (req, res) => {
   const { username } = req.body;
 
@@ -157,14 +208,12 @@ const checkUsername = async (req, res) => {
 
     if (exists) {
       const email = result.rows[0].user_email;
-
-      // 🔐 توليد نسخة مخفية من الإيميل
       const maskedEmail = maskEmail(email);
 
       res.json({
         exists: true,
-        email: email, // الإيميل الأصلي (اختياري حسب حاجتك)
-        maskedEmail: maskedEmail, // الإيميل المخفي لإظهاره في الواجهة
+        email,
+        maskedEmail,
       });
     } else {
       res.status(404).json({
@@ -177,7 +226,8 @@ const checkUsername = async (req, res) => {
     res.status(500).json({ error: "حدث خطأ في الخادم" });
   }
 };
-// 🧠 دالة مساعدة لإخفاء الإيميل
+
+// دالة إخفاء جزء من الإيميل
 function maskEmail(email) {
   const [name, domain] = email.split("@");
   const visible = name.slice(0, 2);
@@ -185,82 +235,61 @@ function maskEmail(email) {
   return `${visible}${hidden}@${domain}`;
 }
 
-
-// ✅ تحقق من البريد الإلكتروني
-const verifyEmail = async (req, res) => {
+const sendVerificationCode = async (req, res) => {
   const { username, email } = req.body;
 
+  if (!username || !email) {
+    return res.status(400).json({
+      success: false,
+      message: "اسم المستخدم والبريد الإلكتروني مطلوبان",
+    });
+  }
+// 🛡️ نظام تحديد عدد المحاولات (بحد أقصى 5 خلال ساعة)
+  const now = Date.now();
+  const windowSize = 60 * 60 * 1000; // ساعة
+  const maxAttempts = 5;
+
+  if (!global.rateLimitMap) {
+    global.rateLimitMap = new Map();
+  }
+
+  const attempts = global.rateLimitMap.get(username) || [];
+  const recentAttempts = attempts.filter((ts) => now - ts < windowSize);
+
+  if (recentAttempts.length >= maxAttempts) {
+    return res.status(429).json({
+      success: false,
+      message: "لقد تجاوزت الحد الأقصى لعدد المحاولات. الرجاء المحاولة بعد ساعة.",
+    });
+  }
   try {
+    // ✅ الخطوة 1: نتحقق إذا اسم المستخدم موجود
     const result = await pool.query(
       "SELECT user_email FROM users WHERE user_name = $1",
       [username]
     );
 
     if (result.rows.length === 0) {
-      return res.json({ success: false });
+      return res.status(404).json({ success: false, message: "اسم المستخدم غير موجود" });
     }
 
     const dbEmail = result.rows[0].user_email;
 
-    if (dbEmail.toLowerCase() === email.toLowerCase()) {
-      return res.json({ success: true });
-    } else {
-      return res.json({ success: false });
+    if (dbEmail.toLowerCase() !== email.toLowerCase()) {
+      return res.status(400).json({ success: false, message: "البريد الإلكتروني غير مطابق للمستخدم" });
     }
-  } catch (err) {
-    console.error("خطأ في التحقق من الإيميل:", err);
-    res.status(500).json({ success: false });
-  }
-};
 
-// في المسار: /api/auth/send-verification-code
-router.post("/send-verification-code", async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ success: false, message: "البريد مطلوب" });
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 دقيقة
 
-  // توليد رمز عشوائي من 6 أرقام
-  const code = Math.floor(100000 + Math.random() * 900000);
+    console.log(`🔐 رمز التحقق: ${code}`);
+    console.log(`⏰ ينتهي في: ${expires.toLocaleString()}`);
 
-  // حفظه مؤقتًا في الذاكرة أو قاعدة بيانات (مثلاً Redis أو جدول خاص)
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // بعد 15 دقيقة
-  await db.query(
-    "INSERT INTO verification_codes (email, code, expires_at) VALUES ($1, $2, $3)",
-    [email, code, expiresAt]
-  );
-
-  // إرسال الإيميل (تحتاج nodemailer)
-  const transporter = nodemailer.createTransport({
-    service: "Gmail",
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  });
-
-  await transporter.sendMail({
-    from: process.env.EMAIL_USER,
-    to: email,
-    subject: "رمز التحقق",
-    text: `رمز التحقق الخاص بك هو: ${code}`
-  });
-
-  res.json({ success: true });
-});
-
-const sendVerificationCode = async (req, res) => {
-  const { username, email } = req.body;
-
-  try {
-    const code = Math.floor(100000 + Math.random() * 900000).toString(); // رمز 6 أرقام
-    const expires = new Date(Date.now() + 15 * 60 * 1000); // صالح 15 دقيقة
-
-    // تحديث الرمز بقاعدة البيانات
     await pool.query(
       "UPDATE users SET reset_token = $1, reset_expires = $2 WHERE user_name = $3 AND user_email = $4",
       [code, expires, username, email]
     );
 
-    // إعداد البريد
     const transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
       port: process.env.EMAIL_PORT,
@@ -272,19 +301,168 @@ const sendVerificationCode = async (req, res) => {
     });
 
     await transporter.sendMail({
-      from: `"كناري" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: "رمز التحقق",
-      text: `رمز التحقق الخاص بك هو: ${code}`,
-    });
+  from: `" كناري لطيور الزينة" <${process.env.EMAIL_USER}>`,
+  to: email,
+  subject: "رمز تحقق _ كناري لطيور الزينة",
+  html: `
+    <div style="
+      direction: rtl;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f9fafb;
+      padding: 30px;
+      color: #1e293b;
+      border-radius: 10px;
+      max-width: 600px;
+      margin: auto;
+      border: 1px solid #cbd5e1;
+    ">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h2 style="color: #0284c7; margin-top: 10px;">رمز التحقق الخاص بك</h2>
+      </div>
+
+      <p style="font-size: 16px;">مرحباً،</p>
+      <p style="font-size: 16px;">لقد طلبت رمز تحقق لتسجيل الدخول أو استعادة كلمة المرور.</p>
+      
+      <div style="
+        font-size: 28px;
+        font-weight: bold;
+        color: #0f172a;
+        background-color: #e0f2fe;
+        padding: 15px 30px;
+        border-radius: 10px;
+        width: fit-content;
+        margin: 20px auto;
+        letter-spacing: 8px;
+        text-align: center;
+        border: 1px dashed #0284c7;
+      ">
+        ${code}
+      </div>
+
+      <p style="font-size: 16px; margin-top: 20px;">
+        يرجى استخدام هذا الرمز لإكمال عملية التحقق. الرمز صالح لمدة <strong>15 دقيقة فقط</strong>.
+      </p>
+
+      <hr style="margin: 30px 0; border: none; border-top: 1px solid #e2e8f0;" />
+
+      <p style="font-size: 14px; color: #64748b;">
+        إذا لم تطلب رمز التحقق هذا، يمكنك تجاهل هذه الرسالة بأمان.
+      </p>
+      <p style="font-size: 14px; color: #64748b; margin-top: 5px;">مع تحيات فريق <strong> كناري لطيور الزينة</strong></p>
+    </div>
+  `,
+});
+
+    // ✅ سجل المحاولة بعد الإرسال الناجح
+    recentAttempts.push(now);
+    global.rateLimitMap.set(username, recentAttempts);
 
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.error("فشل إرسال رمز التحقق:", err);
     res.status(500).json({ success: false, message: "فشل إرسال الرمز" });
   }
 };
 
-module.exports = { sendVerificationCode };
-// ✅ التصدير النهائي
-module.exports = { loginUser, signupUser, checkUsername  , verifyEmail};
+const verifyCode = async (req, res) => {
+  const { username, code } = req.body;
+
+  try {
+    const result = await pool.query(
+      "SELECT reset_token, reset_expires FROM users WHERE user_name = $1",
+      [username]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ success: false, message: "المستخدم غير موجود" });
+    }
+
+    const user = result.rows[0];
+
+    const isExpired = new Date(user.reset_expires) <= new Date();
+    const isCodeMatch = user.reset_token === code;
+
+    if (!isCodeMatch) {
+      return res.status(400).json({ success: false, message: "الرمز غير صحيح" }); // ✅ تم التعديل
+    }
+
+    if (isExpired) {
+      return res.status(400).json({ success: false, message: "انتهت صلاحية الرمز" }); // ✅ تم التعديل
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("خطأ في التحقق:", err);
+    res.status(500).json({ success: false, message: "خطأ في الخادم" });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  const { email, newPassword } = req.body;
+
+  // التحقق من وجود البيانات المطلوبة
+  if (!email || !newPassword) {
+    return res.status(400).json({ 
+      success: false, 
+      message: "يجب إدخال البريد الإلكتروني وكلمة المرور الجديدة" 
+    });
+  }
+
+  // التحقق من صحة البريد الإلكتروني
+  if (!email.includes('@')) {
+    return res.status(400).json({
+      success: false,
+      message: "صيغة البريد الإلكتروني غير صالحة"
+    });
+  }
+
+  try {
+    // 1. التحقق من وجود المستخدم
+    const userCheck = await pool.query(
+      'SELECT user_id FROM users WHERE user_email = $1',
+      [email]
+    );
+
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "لا يوجد حساب مرتبط بهذا البريد الإلكتروني"
+      });
+    }
+
+    // 2. تشفير كلمة المرور الجديدة
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // 3. تحديث كلمة المرور في قاعدة البيانات
+    const result = await pool.query(
+      `UPDATE users 
+       SET password = $1, 
+           reset_token = NULL, 
+           reset_expires = NULL 
+       WHERE user_email = $2 
+       RETURNING user_id, user_name, user_email`,
+      [hashedPassword, email]
+    );
+
+    // 4. إرسال رد النجاح
+    return res.status(200).json({
+      success: true,
+      message: "تم تحديث كلمة المرور بنجاح",
+      user: {
+        id: result.rows[0].user_id,
+        name: result.rows[0].user_name,
+        email: result.rows[0].user_email
+      }
+    });
+
+  } catch (error) {
+    console.error("خطأ في إعادة تعيين كلمة المرور:", error);
+    return res.status(500).json({
+      success: false,
+      message: "حدث خطأ أثناء تحديث كلمة المرور",
+      error: error.message
+    });
+  }
+};
+// التصدير
+module.exports = { loginUser, signupUser,checkUsername,sendVerificationCode ,verifyCode ,  resetPassword   };
