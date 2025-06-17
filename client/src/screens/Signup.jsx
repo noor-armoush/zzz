@@ -125,7 +125,7 @@ export default function Signup() {
             username: formData.username,
             password: formData.password,
             phone: formData.phone,
-            address: formData.city, // أو إنشاء حقل عنوان منفصل
+            address: formData.city, 
             email: formData.email,
             region_id: regionToId[formData.region],
           }),
